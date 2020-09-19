@@ -11,12 +11,54 @@ import static java.nio.file.FileVisitResult.*;
 import java.io.*;
 class Third extends SimpleFileVisitor<Path> {
     static class Workspace {
-        Workspace(Path path,Third third) {
+        private void init() {
+            partition();
+            resolveImports();
+            analyzeMissing();
+            System.out.println("\t"+all.size()+" projects.");
+            if(missingAndOnlyInAWorkspace.size()>0)
+                System.out.println("\t"+missingAndOnlyInAWorkspace.size()+" missingAndOnlyInAWorkspace: "+shortNames("tmissingAndOnlyInAWorkspace",missingAndOnlyInAWorkspace));
+            if(missingAndNotInOnlyInAFolder.size()>0)
+                System.out.println("\t"+missingAndNotInOnlyInAFolder.size()+" missingAndNotInOnlyInAFolder: "+shortNames("missingAndNotInOnlyInAFolder",missingAndNotInOnlyInAFolder));
+            if(locationFiles.size()>0) System.out.println("\t"+locationFiles.size()+" locationFiles: "+shortNames("\tlocation files: ",locationFiles,2));
+            System.out.println("\tpartition");
+            System.out.println("\t"+"(in process) both: "+both.size()+" "+both);
+            if(onlyInAWorkspace.size()>0) System.out.println("\t"+"(in process) only in a workspace (imported?): "+onlyInAWorkspace.size()+" "+onlyInAWorkspace+" "+path);
+            if(onlyInAFolder.size()>0) System.out.println("\t"+"(in process) only in a folder: "+onlyInAFolder.size()+" "+onlyInAFolder);
+            if(metaProjects.size()>0)
+                System.out.println("\t"+"(in process) metaProjects: "+
+            metaProjects.size()+" "+shortNames("metaProjects",metaProjects.keySet()));
+            else System.out.println("\t"+"has no projects from metadata!");
+            // check for no projects
+            System.out.println("\t"+metaProjects.size()+" (.projects) "+projectFolders.size()+" (folders)");
+            if(all.size()!=both.size())
+                System.out.println("maybe strange.");
+        }
+        Workspace(Path path,Third third) throws UnsupportedEncodingException,IOException {
             this.path=path;
             this.parent=third;
+            File projectsFolder_=new File(path.toFile(),dotProjectsFolder);
+            getMetadataProjects(projectsFolder_);
+            // ------------------------------------------------------------
+            getProjectFolders();
+            for(Path file:projectFolders) {
+                String filename=file.getFileName().toString();
+                if(!parent.allProjectNames.add(filename)) {
+                    System.out.println("\t"+file+" is a duplicate project name.");
+                    parent.duplicateNames.add(filename);
+                }
+            }
         }
-        void getMetadataProjects(File projectsFolder_) throws IOException,UnsupportedEncodingException {
-            if(projectsFolder_.exists()) for(File file:projectsFolder_.listFiles()) {
+        void print() {
+            System.out.println("partition: "+path);
+            System.out.println("\t"+"(in process) both: "+both.size()+" "+both);
+            if(onlyInAWorkspace.size()>0) System.out.println("\t"+"(in process) only in a workspace (imported?): "+onlyInAWorkspace.size()+" "+onlyInAWorkspace);
+            if(onlyInAFolder.size()>0) System.out.println("\t"+"(in process) only in a folder: "+onlyInAFolder);
+            // from middle here
+            System.out.println("analyzeMissing: "+path);
+        }
+        void getMetadataProjects(File projectsFolder) throws IOException,UnsupportedEncodingException {
+            if(projectsFolder.exists()) for(File file:projectsFolder.listFiles()) {
                 File locationFile=new File(file,".location");
                 if(locationFile.exists()) {
                     Path location=Paths.get(""+locationFile);
@@ -27,70 +69,85 @@ class Third extends SimpleFileVisitor<Path> {
                         char c=string.charAt(i);
                         if(32<=c&&c<=126) locationString=locationString+string.charAt(i);
                     }
-                    metaProjects.put(file,locationFile);
-                } else metaProjects.put(file,null); // normal case?
+                    metaProjects.put(file.toPath(),locationFile);
+                    locationFiles.add(location);
+                } else metaProjects.put(file.toPath(),null); // normal case?
             }
         }
         private void getProjectFolders() {
             for(File file:path.toFile().listFiles())
                 if(file.isDirectory()) {
                     String projectName=file.getName();
-                    if(!projectName.startsWith(".")&&!projectName.equals(rst)) if(new File(file,".project").exists()) projectFolders.add(file);
+                    if(!projectName.startsWith(".")&&!projectName.equals(rst)) if(new File(file,".project").exists()) projectFolders.add(file.toPath());
                     else nonProjectFolders.add(file);
                 }
         }
         private void partition() {
-            System.out.println("partition: "+path);
-            for(File file:metaProjects.keySet())
-                metadataSet.add(file.getName());
-            for(File file:projectFolders)
-                folderSet.add(file.getName());
-            //System.out.println(set1);
-            //System.out.println(set2);
+            for(Path file:metaProjects.keySet())
+                metadataSet.add(file.getFileName().toString());
+            for(Path file:projectFolders)
+                folderSet.add(file.getFileName().toString());
             both=new TreeSet<>(metadataSet);
             both.retainAll(folderSet);
-            System.out.println("\t"+"(in process) both: "+both);
             onlyInAWorkspace=new TreeSet<>(metadataSet);
             onlyInAWorkspace.removeAll(folderSet);
-            if(onlyInAWorkspace.size()>0) System.out.println("\t"+"(in process) only in a workspace (imported?): "+onlyInAWorkspace);
             onlyInAFolder=new TreeSet<>(folderSet);
             onlyInAFolder.removeAll(metadataSet);
-            if(onlyInAFolder.size()>0) System.out.println("\t"+"(in process) only in a folder: "+onlyInAFolder);
-            //System.out.println("either: "+either);
-            if(onlyInAFolder.size()>0) System.out.println("\t"+"(in process) only in a folder is non empty! ******");
+            all=new TreeSet<>(onlyInAFolder);
+            all.addAll(both);
+            all.addAll(onlyInAWorkspace);
         }
-        private void resolveImports(SortedMap<Path,Workspace> projectsInWorkspaces) {
-            System.out.println("workspace 2: "+path);
-            for(String folder:both) { // project lives in both
+        private void checkImports(String folder,Set<Path> importedBy,Path path2,Workspace workspace) {
+            if(workspace.onlyInAWorkspace.contains(folder)) {
+                //System.out.println(path+" "+folder+" is imported by: "+path2);
+                File target=new File(path2.toFile(),dotProjectsFolder);
+                File target2=new File(target,folder);
+                //System.out.println("potential target: "+target2);
+                if(target2.exists()) {
+                    if(onlyInAFolder.contains(folder))
+                        System.out.println("\t "+folder+" is only in a folder!");
+                    else System.out.println("\tmaybe delete: "+target2+".");
+                }
+                else System.out.println("\ttarget2: "+target2+" does not exist!.");
+                importedBy.add(path2);
+            } else;//System.out.println(workspace.onlyInAWorkspace+" does not contain: "+folder);
+        }
+        private void resolveImports() {
+            System.out.println("\tresolve imports");
+            SortedSet<String> more=new TreeSet<>(both);
+            more.addAll(onlyInAFolder);
+            for(String folder:more) { // project lives in both
                 // maybe look for more in one of the only guys?
+                // maybe not, the project lives here.
                 // how can clojurec2 live in both????
+                //
+                // processBuilder lives in chandler3. it is imported by chandler2.
+                // so why don't we find it?
+                // because there is no processBuilder in the .projects file in chandler3/
+                // so it is in the folder projects as opposed to the metadata projects
+                // also, it's not in both which is where targets are searched.
                 Set<Path> importedBy=new TreeSet<>();
-                for(Entry<Path,Workspace> entry:projectsInWorkspaces.entrySet())
+                for(Entry<Path,Workspace> entry:parent.workspaces.entrySet())
                     if(!entry.getKey().equals(path)) {
-                        Workspace workspace=entry.getValue();
                         Path path2=entry.getKey();
-                        if(workspace.onlyInAWorkspace.contains(folder)) {
-                            System.out.println(path+" "+folder+" is imported by: "+path2);
-                            File target=new File(path2.toFile(),dotProjectsFolder);
-                            File target2=new File(target,folder);
-                            if(target2.exists()) System.out.println("maybe delete: "+target2+" or maybe not.");
-                            else System.out.println("target2: "+target2+" does not exist!.");
-                            importedBy.add(path2);
+                        Workspace workspace=entry.getValue();
+                        if(workspace.onlyInAWorkspace.size()>0) {
+                            //System.out.println("--------");
+                            //System.out.println(path+" "+path2);
+                            //System.out.println(folder+" in? "+workspace.onlyInAWorkspace);
+                            checkImports(folder,importedBy,path2,workspace);
+                            // maybe check other sets?
                         }
                     }
                 if(importedBy.size()==0);//System.out.println(path+" "+folder+" is not imported by any workspace.");
-                else System.out.println("is imported by: "+importedBy);
+                else System.out.println("\tis imported by: "+importedBy);
             }
         }
         private void analyzeMissing() { // needs parent for all and missing
-            System.out.println("analyzeMissing: "+path);
-            Set<String> allInThisFolder=new TreeSet<>(onlyInAFolder);
-            allInThisFolder.addAll(both);
-            allInThisFolder.addAll(onlyInAWorkspace);
-            for(String filename:allInThisFolder)
+            for(String filename:all)
                 if(!parent.allProjectNames.contains(filename)) { // will fail badly if duplicates.
                     //System.out.println("project folder: "+filename+" is missing from: "+path);
-                    File missingFile=new File(path.toFile(),filename);
+                    Path missingFile=new File(path.toFile(),filename).toPath();
                     if(onlyInAWorkspace.contains(filename)) {
                         //System.out.println(filename+" is missing and only in a workspace "+path);
                         missingAndOnlyInAWorkspace.add(missingFile);
@@ -101,30 +158,22 @@ class Third extends SimpleFileVisitor<Path> {
                         missingAndNotInOnlyInAFolder.add(missingFile);
                     }
                 }
-            //if(allInThisFolder.size()>0) System.out.println(allInThisFolder.iterator().next());
-            System.out.println("\t"+allInThisFolder.size()+" projects in: "+path);
-            if(missingAndOnlyInAWorkspace.size()>0) System.out.println(missingAndOnlyInAWorkspace.size()+" missingAndOnlyInAWorkspace: "+missingAndOnlyInAWorkspace);
-            if(missingAndNotInOnlyInAFolder.size()>0) System.out.println(missingAndNotInOnlyInAFolder.size()+" missingAndNotInOnlyInAFolder: "+missingAndNotInOnlyInAFolder);
-            for(Entry<File,File> entry2:metaProjects.entrySet())
-                if(entry2.getValue()!=null) {
-                    String dirname=entry2.getKey().getName();
-                    String location=entry2.getValue().getName();
-                    System.out.println("\t"+dirname+" location.");
-                }
         }
         final Third parent;
         // maybe change this to map of filename to location?
         final Path path;
         SortedSet<String> metadataSet=new TreeSet<>();
         SortedSet<String> folderSet=new TreeSet<>();
-        SortedMap<File,File> metaProjects=new TreeMap<>();
-        SortedSet<File> projectFolders=new TreeSet<>();
+        SortedMap<Path,File> metaProjects=new TreeMap<>();
+        SortedSet<Path> projectFolders=new TreeSet<>();
         SortedSet<File> nonProjectFolders=new TreeSet<>();
         SortedSet<String> both=new TreeSet<>();
         SortedSet<String> onlyInAWorkspace=new TreeSet<>(); // in this workspace
         SortedSet<String> onlyInAFolder=new TreeSet<>();
-        SortedSet<File> missingAndOnlyInAWorkspace=new TreeSet<>();
-        SortedSet<File> missingAndNotInOnlyInAFolder=new TreeSet<>();
+        SortedSet<String> all=new TreeSet<>();
+        SortedSet<Path> missingAndOnlyInAWorkspace=new TreeSet<>();
+        SortedSet<Path> missingAndNotInOnlyInAFolder=new TreeSet<>();
+        SortedSet<Path> locationFiles=new TreeSet<>();
     }
     @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws UnsupportedEncodingException,IOException {
         final File folder=dir.toFile();
@@ -132,6 +181,7 @@ class Third extends SimpleFileVisitor<Path> {
         final File metadataFolder=new File(folder,dotMetadataFolder);
         final boolean isAWorkspace=metadataFolder.exists();
         final File mayBeAProject=new File(folder,dotProjectFilename);
+        if(mayBeAProject.exists()) workspacesInProjects.add(dir);
         final boolean isAProject=mayBeAProject.exists();
         final boolean isAGradleProject=new File(folder,"build.gradle").exists();
         final boolean isAMavenProject=new File(folder,"pom.xml").exists();
@@ -146,20 +196,11 @@ class Third extends SimpleFileVisitor<Path> {
             throw new RuntimeException("both!");
         }
         if(isAWorkspace) { // it's a workspace, but may be empty,  might have folders that are NOT projects! these folders MIGHT have workspaces!
-            Workspace workspace=new Workspace(dir,this);
-            Workspaces.put(dir,workspace);
-            if(new File(folder,dotProjectFilename).exists()) workspacesInProjects.add(dir);
-            File projectsFolder_=new File(folder,dotProjectsFolder);
-            workspace.getMetadataProjects(projectsFolder_);
-            workspace.getProjectFolders();
-            for(File file:workspace.projectFolders) {
-                String filename=file.getName();
-                if(!allProjectNames.add(filename)) {
-                    System.out.println("\t"+file+" is a duplicate project name.");
-                    duplicateNames.add(filename);
-                }
+            if(true/*||dir.getFileName().toString().contains("chandler")*/) {
+                Workspace workspace=new Workspace(dir,this);
+                workspaces.put(dir,workspace);
             }
-            return SKIP_SUBTREE;
+            return SKIP_SUBTREE; // will this miss workspaces and projects in this subtree?
         } else {
             if(isAProject) { // this is an isolated project! - treat as such!
                 if(metadataFolder.exists()) // it's also a workspace
@@ -193,13 +234,23 @@ class Third extends SimpleFileVisitor<Path> {
         System.out.println(file+" "+exc);
         return CONTINUE;
     }
+    static Set<String> shortNames(String name,Set<Path> paths,int n) {
+        Set<String> sortedSet=new LinkedHashSet<>();
+        for(Path path:paths)
+            sortedSet.add(path.getName(path.getNameCount()-n).toString());
+        if(sortedSet.size()<paths.size()) System.out.println("duplicate filename(s)!");
+        return sortedSet;
+    }
+    static Set<String> shortNames(String name,Set<Path> paths) {
+        return shortNames(name,paths,1);
+    }
     private void print() { // gets called more than once
         System.out.println("<<<<<<<< summary");
         SortedSet<Path> workspaceNames=new TreeSet<>();
-        for(Path path:Workspaces.keySet())
+        for(Path path:workspaces.keySet())
             if(!workspaceNames.add(path.getFileName())) System.out.println("duplicate workspace name: "+path);
-        if(workspaceNames.size()<Workspaces.size()) System.out.println("duplicate workspace names!");
-        System.out.println(Workspaces.size()+" workspaces: "+Workspaces.keySet());
+        if(workspaceNames.size()<workspaces.size()) System.out.println("duplicate workspace names!");
+        System.out.println(workspaces.size()+" workspaces: "+workspaces.keySet());
         System.out.println(workspaceNames.size()+" unique workspace names: "+workspaceNames);
         if(emptyWorkspaces.size()>0) System.out.println(emptyWorkspaces.size()+" empty Workspaces: "+emptyWorkspaces);
         if(workspaceFoldersInProjects.size()>0) System.out.println(workspaceFoldersInProjects.size()+" workspace folders in projects: "+workspaceFoldersInProjects);
@@ -215,34 +266,24 @@ class Third extends SimpleFileVisitor<Path> {
     void run(Path startingDir) throws IOException {
         Files.walkFileTree(startingDir,this);
         System.out.println("after walk.");
-        for(Path dir:Workspaces.keySet()) { // summary
-            Workspace workspace=Workspaces.get(dir);
-            System.out.println(dir+" "+workspace.metaProjects.size()+" (.projects) "+workspace.projectFolders.size()+" (folders)");
+        System.out.println(workspaces.size()+" workspaces.");
+        for(Workspace workspace:workspaces.values()) {
+            System.out.println(workspace.path);
+            workspace.init();
+            System.out.println("----------------------------------");
         }
-        for(Workspace workspace:Workspaces.values()) {
-            workspace.partition();
-            // check for no projects
-        }
-        print();
-        System.out.println("------------------------------------");
-        for(Entry<Path,Workspace> entry:Workspaces.entrySet())
-            entry.getValue().resolveImports(Workspaces);
-        print();
-        for(Entry<Path,Workspace> entry:Workspaces.entrySet()) {
-            Workspace workspace=entry.getValue();
-            workspace.analyzeMissing();
-            if(entry.getValue().metaProjects.size()==0) System.out.println("\t"+entry.getKey()+" has no projects from metadata! *****");
-        }
-        print();
+        System.out.println("&&&&&&&&&&&&&&&&&&&&&&&&&");
+        System.out.println(workspaces.size()+" workspaces: "+shortNames("workspaces",workspaces.keySet()));
+
+        //print();
     }
     public static void main(String[] arguments) throws IOException {
         if(arguments==null||arguments.length==0) new Third().run(Paths.get("D:/ray/dev/"));
         else for(String arg:arguments)
             new Third().run(Paths.get("D:/ray/dev/")); // this won'r combine all!
     }
-    // these are similar, maybe combine?
     int totalProjects;
-    SortedMap<Path,Workspace> Workspaces=new TreeMap<>();
+    SortedMap<Path,Workspace> workspaces=new TreeMap<>();
     SortedSet<Path> nonWorkspaceFolders=new TreeSet<>();
     SortedSet<Path> workspaceFoldersInProjects=new TreeSet<>();
     SortedSet<Path> workspacesInProjects=new TreeSet<>();
