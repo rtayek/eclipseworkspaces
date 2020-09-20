@@ -25,14 +25,13 @@ class Third extends SimpleFileVisitor<Path> {
             System.out.println("\t"+"(in process) both: "+both.size()+" "+both);
             if(onlyInAWorkspace.size()>0) System.out.println("\t"+"(in process) only in a workspace (imported?): "+onlyInAWorkspace.size()+" "+onlyInAWorkspace+" "+path);
             if(onlyInAFolder.size()>0) System.out.println("\t"+"(in process) only in a folder: "+onlyInAFolder.size()+" "+onlyInAFolder);
-            if(metaProjects.size()>0)
-                System.out.println("\t"+"(in process) metaProjects: "+
-            metaProjects.size()+" "+shortNames("metaProjects",metaProjects.keySet()));
-            else System.out.println("\t"+"has no projects from metadata!");
+            if(metaProjects.size()>0) {
+                System.out.println("\t"+"(in process) metaProjects: "+metaProjects.size()+" "+shortNames("metaProjects",metaProjects.keySet()));
+                System.out.println(metaProjects);
+            } else System.out.println("\t"+"has no projects from metadata! "+path);
             // check for no projects
             System.out.println("\t"+metaProjects.size()+" (.projects) "+projectFolders.size()+" (folders)");
-            if(all.size()!=both.size())
-                System.out.println("maybe strange.");
+            if(all.size()!=both.size()) System.out.println("maybe strange.");
         }
         Workspace(Path path,Third third) throws UnsupportedEncodingException,IOException {
             this.path=path;
@@ -57,20 +56,25 @@ class Third extends SimpleFileVisitor<Path> {
             // from middle here
             System.out.println("analyzeMissing: "+path);
         }
+        private String getLocation(Path location) throws IOException,UnsupportedEncodingException {
+            byte[] bytes=Files.readAllBytes(location);
+            String string=new String(bytes,"UTF-8");
+            String locationString="";
+            for(int i=0;i<string.length();i++) {
+                char c=string.charAt(i);
+                if(32<=c&&c<=126) locationString=locationString+string.charAt(i);
+            }
+            return locationString;
+        }
         void getMetadataProjects(File projectsFolder) throws IOException,UnsupportedEncodingException {
             if(projectsFolder.exists()) for(File file:projectsFolder.listFiles()) {
                 File locationFile=new File(file,".location");
                 if(locationFile.exists()) {
-                    Path location=Paths.get(""+locationFile);
-                    byte[] bytes=Files.readAllBytes(location);
-                    String string=new String(bytes,"UTF-8");
-                    String locationString="";
-                    for(int i=0;i<string.length();i++) {
-                        char c=string.charAt(i);
-                        if(32<=c&&c<=126) locationString=locationString+string.charAt(i);
-                    }
-                    metaProjects.put(file.toPath(),locationFile);
-                    locationFiles.add(location);
+                    Path locationPath=Paths.get(""+locationFile);
+                    String locationString=getLocation(locationPath);
+                    //System.out.println(locationString);
+                    metaProjects.put(file.toPath(),locationString);
+                    locationFiles.add(locationPath);
                 } else metaProjects.put(file.toPath(),null); // normal case?
             }
         }
@@ -97,18 +101,17 @@ class Third extends SimpleFileVisitor<Path> {
             all.addAll(both);
             all.addAll(onlyInAWorkspace);
         }
-        private void checkImports(String folder,Set<Path> importedBy,Path path2,Workspace workspace) {
+        private void checkImports(String folder,Set<Path> importedBy,Path path2) {
+            Workspace workspace=parent.workspaces.get(path2);
             if(workspace.onlyInAWorkspace.contains(folder)) {
                 //System.out.println(path+" "+folder+" is imported by: "+path2);
                 File target=new File(path2.toFile(),dotProjectsFolder);
                 File target2=new File(target,folder);
                 //System.out.println("potential target: "+target2);
                 if(target2.exists()) {
-                    if(onlyInAFolder.contains(folder))
-                        System.out.println("\t "+folder+" is only in a folder!");
+                    if(onlyInAFolder.contains(folder)) System.out.println("\t "+folder+" is only in a folder!");
                     else System.out.println("\tmaybe delete: "+target2+".");
-                }
-                else System.out.println("\ttarget2: "+target2+" does not exist!.");
+                } else System.out.println("\ttarget2: "+target2+" does not exist!.");
                 importedBy.add(path2);
             } else;//System.out.println(workspace.onlyInAWorkspace+" does not contain: "+folder);
         }
@@ -132,15 +135,12 @@ class Third extends SimpleFileVisitor<Path> {
                         Path path2=entry.getKey();
                         Workspace workspace=entry.getValue();
                         if(workspace.onlyInAWorkspace.size()>0) {
-                            //System.out.println("--------");
-                            //System.out.println(path+" "+path2);
-                            //System.out.println(folder+" in? "+workspace.onlyInAWorkspace);
-                            checkImports(folder,importedBy,path2,workspace);
+                            checkImports(folder,importedBy,path2);
                             // maybe check other sets?
                         }
                     }
                 if(importedBy.size()==0);//System.out.println(path+" "+folder+" is not imported by any workspace.");
-                else System.out.println("\tis imported by: "+importedBy);
+                else System.out.println("\tis imported by: "+importedBy+" "+path);
             }
         }
         private void analyzeMissing() { // needs parent for all and missing
@@ -164,7 +164,7 @@ class Third extends SimpleFileVisitor<Path> {
         final Path path;
         SortedSet<String> metadataSet=new TreeSet<>();
         SortedSet<String> folderSet=new TreeSet<>();
-        SortedMap<Path,File> metaProjects=new TreeMap<>();
+        SortedMap<Path,String> metaProjects=new TreeMap<>();
         SortedSet<Path> projectFolders=new TreeSet<>();
         SortedSet<File> nonProjectFolders=new TreeSet<>();
         SortedSet<String> both=new TreeSet<>();
@@ -272,15 +272,13 @@ class Third extends SimpleFileVisitor<Path> {
             workspace.init();
             System.out.println("----------------------------------");
         }
-        System.out.println("&&&&&&&&&&&&&&&&&&&&&&&&&");
         System.out.println(workspaces.size()+" workspaces: "+shortNames("workspaces",workspaces.keySet()));
-
         //print();
     }
     public static void main(String[] arguments) throws IOException {
-        if(arguments==null||arguments.length==0) new Third().run(Paths.get("D:/ray/dev/"));
-        else for(String arg:arguments)
-            new Third().run(Paths.get("D:/ray/dev/")); // this won'r combine all!
+        if(arguments==null||arguments.length==0) new Third().run(Paths.get("D:/ray/dev"));
+        else for(String argument:arguments)
+            new Third().run(Paths.get(argument)); // this won'r combine all!
     }
     int totalProjects;
     SortedMap<Path,Workspace> workspaces=new TreeMap<>();
