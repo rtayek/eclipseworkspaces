@@ -42,7 +42,6 @@ class Third extends SimpleFileVisitor<Path> {
             this.parent=third;
             File dotProjectsFolder_=new File(path.toFile(),dotProjectsFolder);
             getMetadataProjects(dotProjectsFolder_);
-            // ------------------------------------------------------------
             getProjectFolders();
             for(Path file:projectFolders) {
                 String filename=file.getFileName().toString();
@@ -213,16 +212,17 @@ class Third extends SimpleFileVisitor<Path> {
         System.out.println(">>>>>>>>");
     }
     @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws UnsupportedEncodingException,IOException {
+        FileVisitResult rc=CONTINUE;
         if(verbose) System.out.println(" pre: "+level+"/"+maxLevels+" "+dir);
         if(level>maxLevels) {
             System.out.println("stopping at: "+level+" "+dir);
             //dec(); // why? - because post never gets called
             return SKIP_SUBTREE;
         }
-        inc();
-        stack.push(dir);
         final File folder=dir.toFile();
         if(folder.getName().startsWith(".")) return SKIP_SUBTREE;
+        inc();
+        stack.push(dir);
         final File metadataFolder=new File(folder,dotMetadataFolder);
         final boolean isAWorkspace=metadataFolder.exists();
         final File mayBeAProject=new File(folder,dotProjectFilename);
@@ -241,23 +241,23 @@ class Third extends SimpleFileVisitor<Path> {
             //throw new RuntimeException("both!");
         }
         if(isAWorkspace) { // it's a workspace, but may be empty,  might have folders that are NOT projects! these folders MIGHT have workspaces!
-            if(true/*||dir.getFileName().toString().contains("chandler")*/) {
-                Workspace workspace=new Workspace(dir,this);
-                workspaces.put(dir,workspace);
-            }
-            boolean descend=false; // fails if true!
+            Workspace workspace=new Workspace(dir,this);
+            workspaces.put(dir,workspace);
+            boolean descend=true; // fails if true!
             if(descend) {
                 System.out.println("descend continue");
                 return CONTINUE;
-            }
-            else {
-                dec();
-                Path p=stack.pop();
-                if(!p.equals(dir)) {
-                    System.out.println(p+"!="+dir);
-                    throw new RuntimeException(p+"!="+dir);
+            } else {
+                if(true) {
+                    dec();
+                    Path p=stack.pop();
+                    System.out.println("before pop: "+level+"/"+maxLevels+" "+dir);
+                    if(!p.equals(dir)) {
+                        System.out.println(p+"!="+dir);
+                        throw new RuntimeException("in pre: "+p+"!="+dir);
+                    }
+                    System.out.println("no descend skip subtree");
                 }
-                System.out.println("no descend skip subtree");
                 return SKIP_SUBTREE; // will this miss workspaces and projects in this subtree?
             }
         } else {
@@ -278,12 +278,14 @@ class Third extends SimpleFileVisitor<Path> {
     }
     @Override public FileVisitResult postVisitDirectory(Path dir,IOException exc) {
         dec();
+        Path peek=stack.peek();
+        System.out.println("peek: "+peek);
         Path p=stack.pop();
-        if(!p.equals(dir)) {
-            System.out.println(p+"!="+dir);
-            //throw new RuntimeException(p+"!="+dir);
-        }
         if(verbose) System.out.println("post: "+level+"/"+maxLevels+" "+dir);
+        if(!p.equals(dir)) {
+            System.out.println("in post: "+p+"!="+dir);
+            throw new RuntimeException(p+"!="+dir);
+        }
         if(level>maxLevels) {
             System.out.println("stopping at: "+level+" "+dir);
             //return SKIP_SUBTREE;
@@ -349,7 +351,7 @@ class Third extends SimpleFileVisitor<Path> {
     //    if(helper.onlyInAFolder.contains(filename)) System.out.println(filename+" is missing and only in a folder."); // rare, not seen yet
     //    else System.out.println("project folder: "+filename+" is missing and not in only in a folder."); 
     //private Map<Path,Set<File>> map=new TreeMap<>(); // projects folder to project folder
-    static final int maxLevels=20;
+    static final int maxLevels=100;
     private static final String common=".metadata\\.plugins\\org.eclipse.core.resources\\.projects";
     private static final String rst="RemoteSystemsTempFiles";
     private static final String dotMetadataFolder=".metadata";
