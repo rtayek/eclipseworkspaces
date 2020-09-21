@@ -177,83 +177,11 @@ class Third extends SimpleFileVisitor<Path> {
         SortedSet<Path> missingAndNotInOnlyInAFolder=new TreeSet<>();
         SortedSet<Path> locationFiles=new TreeSet<>();
     }
-    @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws UnsupportedEncodingException,IOException {
-        System.out.println(" pre: "+level+"/"+maxLevels+" "+dir);
-        if(level>maxLevels) {
-            System.out.println("stopping at: "+level+" "+dir);
-            //dec(); // why?
-            return SKIP_SUBTREE;
-        }
-        inc();
-        final File folder=dir.toFile();
-        if(folder.getName().startsWith(".")) return SKIP_SUBTREE;
-        final File metadataFolder=new File(folder,dotMetadataFolder);
-        final boolean isAWorkspace=metadataFolder.exists();
-        final File mayBeAProject=new File(folder,dotProjectFilename);
-        if(mayBeAProject.exists()) workspacesInProjects.add(dir);
-        final boolean isAProject=mayBeAProject.exists();
-        final boolean isAGradleProject=new File(folder,"build.gradle").exists();
-        final boolean isAMavenProject=new File(folder,"pom.xml").exists();
-        if(folder.toString().endsWith("ies\\util")) {
-            int x;
-            x=2;
-        }
-        if(isAWorkspace&&isAProject) {
-            System.out.println(metadataFolder);
-            System.out.println(mayBeAProject);
-            System.out.println(dir+"both! ******************************");
-            //throw new RuntimeException("both!");
-        }
-        if(isAWorkspace) { // it's a workspace, but may be empty,  might have folders that are NOT projects! these folders MIGHT have workspaces!
-            if(true/*||dir.getFileName().toString().contains("chandler")*/) {
-                Workspace workspace=new Workspace(dir,this);
-                workspaces.put(dir,workspace);
-            }
-            dec();
-            return SKIP_SUBTREE; // will this miss workspaces and projects in this subtree?
-        } else {
-            if(isAProject) { // this is an isolated project! - treat as such!
-                if(metadataFolder.exists()) // it's also a workspace
-                    workspaceFoldersInProjects.add(dir); // never happen?
-                orphanProjects.add(dir);
-            } else if(isAGradleProject) { // and probably not an eclipse project
-                gradleProjects.add(dir);
-                orphanProjects.add(dir);
-            } else if(isAMavenProject) {
-                mavenProjects.add(dir);
-                orphanProjects.add(dir);
-            }
-        }
-        return CONTINUE;
-    }
-    @Override public FileVisitResult postVisitDirectory(Path dir,IOException exc) {
-        dec();
-        System.out.println("post: "+level+"/"+maxLevels+" "+dir);
-        if(level>maxLevels) {
-            System.out.println("stopping at: "+level+" "+dir);
-            //return SKIP_SUBTREE;
-        }
-        return CONTINUE;
-    }
     private void inc() {
         ++level;
     }
     private void dec() {
         --level;
-    }
-    @Override public FileVisitResult visitFile(Path file,BasicFileAttributes attrs) {
-        if(attrs.isSymbolicLink()) {
-            System.out.format("Symbolic link: %s ",file);
-        } else if(attrs.isRegularFile()) {
-            ;//System.out.format("Regular file: %s ",file);
-        } else {
-            System.out.format("Other: %s ",file);
-        }
-        return CONTINUE;
-    }
-    @Override public FileVisitResult visitFileFailed(Path file,IOException exc) {
-        System.out.println(file+" "+exc);
-        return CONTINUE;
     }
     static Set<String> shortNames(String name,Set<Path> paths,int n) {
         Set<String> sortedSet=new LinkedHashSet<>();
@@ -283,6 +211,98 @@ class Third extends SimpleFileVisitor<Path> {
         if(duplicateNames.size()>0) System.out.println(duplicateNames.size()+" duplicate project names: "+duplicateNames);
         //System.out.println(allProjectNames.size()+" project names.");
         System.out.println(">>>>>>>>");
+    }
+    @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws UnsupportedEncodingException,IOException {
+        if(verbose) System.out.println(" pre: "+level+"/"+maxLevels+" "+dir);
+        if(level>maxLevels) {
+            System.out.println("stopping at: "+level+" "+dir);
+            //dec(); // why? - because post never gets called
+            return SKIP_SUBTREE;
+        }
+        inc();
+        stack.push(dir);
+        final File folder=dir.toFile();
+        if(folder.getName().startsWith(".")) return SKIP_SUBTREE;
+        final File metadataFolder=new File(folder,dotMetadataFolder);
+        final boolean isAWorkspace=metadataFolder.exists();
+        final File mayBeAProject=new File(folder,dotProjectFilename);
+        if(mayBeAProject.exists()) workspacesInProjects.add(dir);
+        final boolean isAProject=mayBeAProject.exists();
+        final boolean isAGradleProject=new File(folder,"build.gradle").exists();
+        final boolean isAMavenProject=new File(folder,"pom.xml").exists();
+        if(folder.toString().endsWith("ies\\util")) {
+            int x;
+            x=2;
+        }
+        if(isAWorkspace&&isAProject) {
+            System.out.println(metadataFolder);
+            System.out.println(mayBeAProject);
+            System.out.println(dir+"both! ******************************");
+            //throw new RuntimeException("both!");
+        }
+        if(isAWorkspace) { // it's a workspace, but may be empty,  might have folders that are NOT projects! these folders MIGHT have workspaces!
+            if(true/*||dir.getFileName().toString().contains("chandler")*/) {
+                Workspace workspace=new Workspace(dir,this);
+                workspaces.put(dir,workspace);
+            }
+            boolean descend=false; // fails if true!
+            if(descend) {
+                System.out.println("descend continue");
+                return CONTINUE;
+            }
+            else {
+                dec();
+                Path p=stack.pop();
+                if(!p.equals(dir)) {
+                    System.out.println(p+"!="+dir);
+                    throw new RuntimeException(p+"!="+dir);
+                }
+                System.out.println("no descend skip subtree");
+                return SKIP_SUBTREE; // will this miss workspaces and projects in this subtree?
+            }
+        } else {
+            if(isAProject) { // this is an isolated project! - treat as such!
+                if(metadataFolder.exists()) // it's also a workspace
+                    workspaceFoldersInProjects.add(dir); // never happen?
+                orphanProjects.add(dir);
+            } else if(isAGradleProject) { // and probably not an eclipse project
+                gradleProjects.add(dir);
+                orphanProjects.add(dir);
+            } else if(isAMavenProject) {
+                mavenProjects.add(dir);
+                orphanProjects.add(dir);
+            }
+            System.out.println("default continue");
+            return CONTINUE;
+        }
+    }
+    @Override public FileVisitResult postVisitDirectory(Path dir,IOException exc) {
+        dec();
+        Path p=stack.pop();
+        if(!p.equals(dir)) {
+            System.out.println(p+"!="+dir);
+            //throw new RuntimeException(p+"!="+dir);
+        }
+        if(verbose) System.out.println("post: "+level+"/"+maxLevels+" "+dir);
+        if(level>maxLevels) {
+            System.out.println("stopping at: "+level+" "+dir);
+            //return SKIP_SUBTREE;
+        }
+        return CONTINUE;
+    }
+    @Override public FileVisitResult visitFile(Path file,BasicFileAttributes attrs) {
+        if(attrs.isSymbolicLink()) {
+            System.out.format("Symbolic link: %s ",file);
+        } else if(attrs.isRegularFile()) {
+            ;//System.out.format("Regular file: %s ",file);
+        } else {
+            System.out.format("Other: %s ",file);
+        }
+        return CONTINUE;
+    }
+    @Override public FileVisitResult visitFileFailed(Path file,IOException exc) {
+        System.out.println(file+" "+exc);
+        return CONTINUE;
     }
     void run(List<Path> paths) throws IOException {
         for(Path path:paths) {
@@ -314,6 +334,8 @@ class Third extends SimpleFileVisitor<Path> {
     }
     int totalProjects;
     int level;
+    boolean verbose=true;
+    Stack<Path> stack=new Stack<>();
     SortedMap<Path,Workspace> workspaces=new TreeMap<>();
     SortedSet<Path> nonWorkspaceFolders=new TreeSet<>();
     SortedSet<Path> workspaceFoldersInProjects=new TreeSet<>();
@@ -327,7 +349,7 @@ class Third extends SimpleFileVisitor<Path> {
     //    if(helper.onlyInAFolder.contains(filename)) System.out.println(filename+" is missing and only in a folder."); // rare, not seen yet
     //    else System.out.println("project folder: "+filename+" is missing and not in only in a folder."); 
     //private Map<Path,Set<File>> map=new TreeMap<>(); // projects folder to project folder
-    static final int maxLevels=5;
+    static final int maxLevels=20;
     private static final String common=".metadata\\.plugins\\org.eclipse.core.resources\\.projects";
     private static final String rst="RemoteSystemsTempFiles";
     private static final String dotMetadataFolder=".metadata";
