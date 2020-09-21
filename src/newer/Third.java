@@ -202,7 +202,9 @@ class Third extends SimpleFileVisitor<Path> {
         System.out.println(workspaceNames.size()+" unique workspace names: "+workspaceNames);
         if(emptyWorkspaces.size()>0) System.out.println(emptyWorkspaces.size()+" empty Workspaces: "+emptyWorkspaces);
         if(workspaceFoldersInProjects.size()>0) System.out.println(workspaceFoldersInProjects.size()+" workspace folders in projects: "+workspaceFoldersInProjects);
-        if(workspacesInProjects.size()>0) System.out.println(workspacesInProjects.size()+" workspacesInAProjects: "+workspacesInProjects);
+        if(workspacesInProjects.size()>0) if(workspacesInProjects.size()<20) 
+            System.out.println(workspacesInProjects.size()+" workspacesInAProjects: "+workspacesInProjects);
+        else System.out.println(workspacesInProjects.size()+" workspacesInAProjects.");
         //workspacesInAProjects
         if(orphanProjects.size()>0) System.out.println(orphanProjects.size()+" orphans: "/*+orphanProjects*/);
         if(gradleProjects.size()>0) System.out.println(gradleProjects.size()+" gradle projects: "+gradleProjects);
@@ -243,20 +245,17 @@ class Third extends SimpleFileVisitor<Path> {
         if(isAWorkspace) { // it's a workspace, but may be empty,  might have folders that are NOT projects! these folders MIGHT have workspaces!
             Workspace workspace=new Workspace(dir,this);
             workspaces.put(dir,workspace);
-            boolean descend=true; // fails if true!
+            boolean descend=true;
             if(descend) {
-                System.out.println("descend continue");
                 return CONTINUE;
             } else {
                 if(true) {
                     dec();
                     Path p=stack.pop();
-                    System.out.println("before pop: "+level+"/"+maxLevels+" "+dir);
                     if(!p.equals(dir)) {
                         System.out.println(p+"!="+dir);
                         throw new RuntimeException("in pre: "+p+"!="+dir);
                     }
-                    System.out.println("no descend skip subtree");
                 }
                 return SKIP_SUBTREE; // will this miss workspaces and projects in this subtree?
             }
@@ -272,18 +271,14 @@ class Third extends SimpleFileVisitor<Path> {
                 mavenProjects.add(dir);
                 orphanProjects.add(dir);
             }
-            System.out.println("default continue");
             return CONTINUE;
         }
     }
     @Override public FileVisitResult postVisitDirectory(Path dir,IOException exc) {
         dec();
-        Path peek=stack.peek();
-        System.out.println("peek: "+peek);
         Path p=stack.pop();
         if(verbose) System.out.println("post: "+level+"/"+maxLevels+" "+dir);
         if(!p.equals(dir)) {
-            System.out.println("in post: "+p+"!="+dir);
             throw new RuntimeException(p+"!="+dir);
         }
         if(level>maxLevels) {
@@ -336,7 +331,7 @@ class Third extends SimpleFileVisitor<Path> {
     }
     int totalProjects;
     int level;
-    boolean verbose=true;
+    boolean verbose;
     Stack<Path> stack=new Stack<>();
     SortedMap<Path,Workspace> workspaces=new TreeMap<>();
     SortedSet<Path> nonWorkspaceFolders=new TreeSet<>();
