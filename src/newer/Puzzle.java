@@ -1,4 +1,4 @@
-package p;
+package newer;
 //Find all possible positive integers a, b, c, and d such that 
 //ab = c+d
 //and
