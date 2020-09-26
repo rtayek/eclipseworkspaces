@@ -19,29 +19,42 @@ class Third extends SimpleFileVisitor<Path> {
         static void printIf(String name,Collection<?> collection,int n,boolean complain) {
             int size=collection.size();
             if(size>0) if(size<n) System.out.println("\t"+collection.size()+" "+name+"(s): "+collection);
-            else System.out.println("\t"+collection.size()+" "+name+"(s)");
+            else System.out.println("\t"+collection.size()+" "+name+"(s) ... ");
             else if(complain) System.out.println("\t"+name+" is empty.");
+        }
+        boolean isNormal() {
+            if(all.size()!=both.size()) return false;
+            if(all.size()!=metaProjects.size()) return false;
+            if(missingAndOnlyInAWorkspace.size()>0) return false;
+            if(missingAndNotInOnlyInAFolder.size()>0) return false;
+            if(onlyInAWorkspace.size()>0) return false;
+            if(onlyInAFolder.size()>0) return false;
+            if(locationFiles.size()>0) return false;
+            return true;
         }
         private void init() {
             partition();
             resolveImports();
             analyzeMissing();
-            printIf("all",all,10);
-            printIf("missingAndOnlyInAWorkspace",missingAndOnlyInAWorkspace,10);
-            printIf("missingAndNotInOnlyInAFolder",missingAndNotInOnlyInAFolder,10);
-            printIf("locationFiles",locationFiles,10,false);
-            System.out.println("\tpartition");
-            printIf("both",both,10);
-            printIf("onlyInAWorkspace",onlyInAWorkspace,10);
-            printIf("onlyInAFolder",onlyInAFolder,10);
-            printIf("metaProjects",metaProjects.entrySet(),10);
-            if(all.size()!=both.size()) System.out.println("strange perhaps.");
-            System.out.println("\t end of: "+path);
+            if(isNormal()) System.out.println("\tnormal");
+            else {
+                printIf("all",all,10);
+                printIf("missingAndOnlyInAWorkspace",missingAndOnlyInAWorkspace,10);
+                if(!missingAndNotInOnlyInAFolder.equals(missingAndOnlyInAWorkspace))
+                    printIf("missingAndNotInOnlyInAFolder",missingAndNotInOnlyInAFolder,10);
+                printIf("locationFiles",locationFiles,10,false);
+                System.out.println("\tpartition");
+                if(!both.equals(metaProjects.keySet())) printIf("both",both,10);
+                printIf("onlyInAWorkspace",onlyInAWorkspace,10);
+                printIf("onlyInAFolder",onlyInAFolder,10);
+                printIf("metaProjects",metaProjects.entrySet(),10);
+                if(all.size()!=both.size()) System.out.println("strange perhaps.");
+            }
+            System.out.println("\tend of: "+path);
         }
         Workspace(Path path,Third third) throws UnsupportedEncodingException,IOException {
             this.path=path;
             this.parent=third;
-            System.out.println("new workspace: "+path);
             File file_=new File(path.toFile(),dotProjectsFolderString);
             dotProjectsFolder=file_.exists()?file_:null;
             if(dotProjectsFolder==null) System.out.println("not really a workspace!");
@@ -117,7 +130,7 @@ class Third extends SimpleFileVisitor<Path> {
                     //System.out.println(locationString);
                     metaProjects.put(dotProjectFolder.getName(),locationString);
                     //ystem.out.println("added: "+file.getName()+" "+locationString);
-                    locationFiles.add(locationPath);
+                    locationFiles.add(locationPath.getParent().getFileName()+"/"+locationPath.getFileName());
                 } else {
                     metaProjects.put(dotProjectFolder.getName(),null); // normal case?
                     //System.out.println("added: "+file.getName()+" null");
@@ -128,8 +141,7 @@ class Third extends SimpleFileVisitor<Path> {
             for(File folder:path.toFile().listFiles())
                 if(folder.isDirectory()) {
                     String projectName=folder.getName();
-                    if(projectName.equals(".metadata")) System.out.println("skipping .metadata folder in project folder");
-                    ;
+                    if(false&&projectName.equals(".metadata")) System.out.println("skipping .metadata folder in project folder");
                     if(!projectName.startsWith(".")&&!projectName.equals(rst)) if(new File(folder,dotProjectFilename).exists()) {
                         projectFolders.add(folder.toPath());
                         String folderName=folder.getName();
@@ -220,7 +232,7 @@ class Third extends SimpleFileVisitor<Path> {
         SortedSet<String> all=new TreeSet<>();
         SortedSet<Path> missingAndOnlyInAWorkspace=new TreeSet<>();
         SortedSet<Path> missingAndNotInOnlyInAFolder=new TreeSet<>();
-        SortedSet<Path> locationFiles=new TreeSet<>();
+        SortedSet<String> locationFiles=new TreeSet<>();
         static Set<List<Byte>> uriPrefix=new LinkedHashSet<>(); // not thread save!
     }
     private void inc() {
@@ -249,7 +261,7 @@ class Third extends SimpleFileVisitor<Path> {
         Workspace.printIf("workspaceNames",workspaceNames,10);
         Workspace.printIf("emptyWorkspaces",emptyWorkspaces,10);
         Workspace.printIf("workspaceFoldersInProjects",workspaceFoldersInProjects,10);
-        Workspace.printIf("workspacesInProjects",workspacesInProjects,10);
+        Workspace.printIf("someProjects",someProjects,10);
         //workspacesInAProjects
         Workspace.printIf("orphanProjects",orphanProjects,10);
         Workspace.printIf("gradleProjects",gradleProjects,10);
@@ -279,8 +291,8 @@ class Third extends SimpleFileVisitor<Path> {
         File dotProjectsFolder=new File(folder,dotProjectsFolderString);
         boolean isAWorkspace=dotProjectsFolder.exists();
         final File mayBeAProject=new File(folder,dotProjectFilename);
-        if(mayBeAProject.exists()) workspacesInProjects.add(dir);
         final boolean isAProject=mayBeAProject.exists();
+        if(isAProject) someProjects.add(dir);
         final boolean isAGradleProject=new File(folder,"build.gradle").exists();
         final boolean isAMavenProject=new File(folder,"pom.xml").exists();
         if(folder.toString().endsWith("ies\\util")) {
@@ -379,9 +391,9 @@ class Third extends SimpleFileVisitor<Path> {
         if(false) {
             strings=new String[] {"D:/ray/dev/chandler","D:/ray/dev/john","D:/ray/dev/androidapps"};
         } else if(arguments==null||arguments.length==0) {
-            //strings=new String[] {"D:/ray/newdev"/*,"D:/ray/dev","d:/dev"*/};
-            //strings=new String[] {"D:/ray/newdev","D:/ray/dev"};
-            strings=new String[] {"D:/ray/newdev"};
+            //strings=new String[] {"D:/ray/main","D:/ray/dev","d:/dev"};
+            strings=new String[] {"D:/ray/main","D:/ray/dev"};
+            //strings=new String[] {"D:/ray/main"};
         } else strings=arguments;
         List<Path> paths=new ArrayList<>();
         for(String string:strings)
@@ -396,7 +408,7 @@ class Third extends SimpleFileVisitor<Path> {
     SortedMap<Path,Workspace> workspaces=new TreeMap<>();
     SortedSet<Path> nonWorkspaceFolders=new TreeSet<>();
     SortedSet<Path> workspaceFoldersInProjects=new TreeSet<>();
-    SortedSet<Path> workspacesInProjects=new TreeSet<>();
+    SortedSet<Path> someProjects=new TreeSet<>();
     SortedSet<Path> orphanProjects=new TreeSet<>();
     SortedSet<Path> emptyWorkspaces=new TreeSet<>();
     SortedSet<Path> gradleProjects=new TreeSet<>();
