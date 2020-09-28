@@ -148,7 +148,7 @@ class Third extends SimpleFileVisitor<Path> {
                             String folderName=folder.getName();
                             if(!parent.allProjectNames.add(folderName)) {
                                 //System.out.println("\t"+file+" is a duplicate project name.");
-                                parent.duplicateNames.add(folderName);
+                                parent.duplicateProjectNames.add(folderName);
                             }
                         } else nonProjectFolders.add(folder);
                     } else; // starts with a dot
@@ -269,13 +269,16 @@ class Third extends SimpleFileVisitor<Path> {
         Workspace.printIf("orphanProjects",orphanProjects,10);
         Workspace.printIf("gradleProjects",gradleProjects,10);
         Workspace.printIf("mavenProjects",mavenProjects,10);
-        Workspace.printIf("duplicateNames",duplicateNames,10);
+        Workspace.printIf("pythonProjects",pythonProjects,10);
+        Workspace.printIf("vsCode projects",vsCodeProjects,10);
+        Workspace.printIf("duplicateProjectNames",duplicateProjectNames,10);
         Workspace.printIf("allProjectNames",allProjectNames,10);
         Workspace.printIf("all just folders: ",allJustAFolders,50);
         //System.out.println(allProjectNames.size()+" project names.");
         System.out.println(">>>>>>>>");
     }
     @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws UnsupportedEncodingException,IOException {
+        if(dir.toString().contains("RECYCLE.BIN")) return SKIP_SUBTREE;
         if(dir.toString().contains("justa")) {
             int x;
             x=2;
@@ -299,6 +302,8 @@ class Third extends SimpleFileVisitor<Path> {
         if(isAProject) someProjects.add(dir);
         final boolean isAGradleProject=new File(folder,"build.gradle").exists();
         final boolean isAMavenProject=new File(folder,"pom.xml").exists();
+        final boolean isAPythonProject=new File(folder,"__init__.py").exists()||new File(folder,"__pycache__").exists();
+        final boolean isAVSCodeProject=new File(folder,".vscode").exists();
         if(isAWorkspace&&isAProject) {
             System.out.println(metadataFolder);
             System.out.println(mayBeAProject);
@@ -335,6 +340,12 @@ class Third extends SimpleFileVisitor<Path> {
                 }
             } else if(isAGradleProject) { // and probably not an eclipse project
                 gradleProjects.add(dir);
+                orphanProjects.add(dir);
+            } else if(isAPythonProject) {
+                pythonProjects.add(dir);
+                orphanProjects.add(dir);
+            } else if(isAVSCodeProject) {
+                vsCodeProjects.add(dir);
                 orphanProjects.add(dir);
             } else if(isAMavenProject) {
                 mavenProjects.add(dir);
@@ -403,6 +414,7 @@ class Third extends SimpleFileVisitor<Path> {
             strings=new String[] {"D:/ray/main","D:/ray/dev"};
             strings=new String[] {"D:/ray/main"};
             strings=new String[] {"D:/ray/main","D:/ray/dev","d:/dev"};
+            strings=new String[] {"D:/ray/dev"};
         } else strings=arguments;
         List<Path> paths=new ArrayList<>();
         for(String string:strings)
@@ -424,9 +436,11 @@ class Third extends SimpleFileVisitor<Path> {
     SortedSet<Path> orphanProjects=new TreeSet<>();
     SortedSet<Path> emptyWorkspaces=new TreeSet<>();
     SortedSet<Path> gradleProjects=new TreeSet<>();
+    SortedSet<Path> pythonProjects=new TreeSet<>();
+    SortedSet<Path> vsCodeProjects=new TreeSet<>();
     SortedSet<Path> mavenProjects=new TreeSet<>();
     SortedSet<String> allProjectNames=new TreeSet<>();
-    SortedSet<String> duplicateNames=new TreeSet<>();
+    SortedSet<String> duplicateProjectNames=new TreeSet<>();
     //    if(helper.onlyInAFolder.contains(filename)) System.out.println(filename+" is missing and only in a folder."); // rare, not seen yet
     //    else System.out.println("project folder: "+filename+" is missing and not in only in a folder."); 
     //private Map<Path,Set<File>> map=new TreeMap<>(); // projects folder to project folder
