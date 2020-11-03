@@ -7,13 +7,13 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.io.File;
 import java.io.IOException;
 import java.util.Objects;
-public class Test extends SimpleFileVisitor<Path> {
+public class TestLevel extends SimpleFileVisitor<Path> {
     private void run(Path path) throws IOException {
         Files.walkFileTree(path,this);
     }
     public static void main(String[] args) throws IOException {
-        Test test=new Test();
-        test.run(Path.of("d:/ray/dev"));
+        TestLevel test=new TestLevel();
+        test.run(Path.of("d:/dev"));
     }
     @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws IOException {
         Objects.requireNonNull(dir);

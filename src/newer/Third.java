@@ -21,6 +21,8 @@ class Third extends SimpleFileVisitor<Path> {
             else if(complain) System.out.println("\t"+name+" is empty.");
         }
         boolean isNormal() {
+            boolean always=true;
+            if(always) return false;
             if(all.size()!=both.size()) return false;
             if(all.size()!=metaProjects.size()) return false;
             if(missingAndOnlyInAWorkspace.size()>0) return false;
@@ -40,14 +42,13 @@ class Third extends SimpleFileVisitor<Path> {
                 printIf("missingAndOnlyInAWorkspace",missingAndOnlyInAWorkspace,10);
                 if(!missingAndNotInOnlyInAFolder.equals(missingAndOnlyInAWorkspace)) printIf("missingAndNotInOnlyInAFolder",missingAndNotInOnlyInAFolder,10);
                 printIf("locationFiles",locationFiles,10,false);
-                System.out.println("\tpartition");
                 if(!both.equals(metaProjects.keySet())) printIf("both",both,10);
                 printIf("onlyInAWorkspace",onlyInAWorkspace,10);
                 printIf("onlyInAFolder",onlyInAFolder,10);
                 printIf("metaProjects",metaProjects.entrySet(),25);
                 printIf("just folders",justAFolders,5);
-                printIf("nonProjectFolders",nonProjectFolders,10);
-                if(all.size()!=both.size()) System.out.println("strange perhaps.");
+                printIf("nonProjectFolders",nonProjectFolders,15);
+                if(all.size()!=both.size()) System.out.println("\tpeculiar perhaps.");
             }
             System.out.println("\tend of: "+path);
         }
@@ -106,7 +107,7 @@ class Third extends SimpleFileVisitor<Path> {
             int end=string.indexOf(0,start);
             if(start!=-1&&end!=-1) {
                 String mine=string.substring(start,end);
-                if(start!=16) System.out.println("strange start: "+start);
+                if(start!=16) System.out.println("unusual start: "+start);
                 String target3="URI//file:/";
                 if(mine.startsWith(target3)) {
                     mine=mine.substring(target3.length());
@@ -141,7 +142,8 @@ class Third extends SimpleFileVisitor<Path> {
             for(File folder:path.toFile().listFiles())
                 if(folder.isDirectory()) {
                     String projectName=folder.getName();
-                    if(false&&projectName.equals(".metadata")) System.out.println("skipping .metadata folder in project folder");
+                    boolean f=false;
+                    if(f&&projectName.equals(".metadata")) System.out.println("skipping .metadata folder in project folder");
                     if(!projectName.startsWith(".")&&!projectName.equals(rst)) {
                         if(new File(folder,dotProjectFilename).exists()) {
                             projectFolders.add(folder.toPath());
@@ -186,7 +188,6 @@ class Third extends SimpleFileVisitor<Path> {
             } else;//System.out.println(workspace.onlyInAWorkspace+" does not contain: "+folder);
         }
         private void resolveImports() {
-            System.out.println("\tresolve im+ports");
             SortedSet<String> more=new TreeSet<>(both);
             more.addAll(onlyInAFolder);
             for(String folder:more) {
@@ -279,10 +280,6 @@ class Third extends SimpleFileVisitor<Path> {
     }
     @Override public FileVisitResult preVisitDirectory(Path dir,BasicFileAttributes attrs) throws UnsupportedEncodingException,IOException {
         if(dir.toString().contains("RECYCLE.BIN")) return SKIP_SUBTREE;
-        if(dir.toString().contains("justa")) {
-            int x;
-            x=2;
-        }
         FileVisitResult rc=CONTINUE;
         if(verbose) System.out.println(" pre: "+level+"/"+maxLevels+" "+dir);
         if(level>maxLevels) {
@@ -408,13 +405,8 @@ class Third extends SimpleFileVisitor<Path> {
     }
     public static void main(String[] arguments) throws IOException {
         String[] strings=null;
-        if(false) {
-            strings=new String[] {"D:/ray/dev/chandler","D:/ray/dev/john","D:/ray/dev/androidapps"};
-        } else if(arguments==null||arguments.length==0) {
-            strings=new String[] {"D:/ray/main","D:/ray/dev"};
-            strings=new String[] {"D:/ray/main"};
-            strings=new String[] {"D:/ray/main","D:/ray/dev","d:/dev"};
-            strings=new String[] {"D:/ray/dev"};
+        if(arguments==null||arguments.length==0) {
+            strings=new String[] {"D:/ray"};
         } else strings=arguments;
         List<Path> paths=new ArrayList<>();
         for(String string:strings)
