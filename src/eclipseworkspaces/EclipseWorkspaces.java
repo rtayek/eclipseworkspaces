@@ -1,4 +1,4 @@
-package newer;
+package eclipseworkspaces;
 import java.nio.file.*;
 // no more "maybe delete" messages from eclipse workspaces project
 // added paths to rapps projects. no maybe! 
@@ -9,7 +9,7 @@ import java.util.*;
 import java.util.Map.Entry;
 import static java.nio.file.FileVisitResult.*;
 import java.io.*;
-class Third extends SimpleFileVisitor<Path> {
+class EclipseWorkspaces extends SimpleFileVisitor<Path> {
     static class Workspace {
         static void printIf(String name,Collection<?> collection,int n) {
             printIf(name,collection,n,true);
@@ -52,7 +52,7 @@ class Third extends SimpleFileVisitor<Path> {
             }
             System.out.println("\tend of: "+path);
         }
-        Workspace(Path path,Third third) throws UnsupportedEncodingException,IOException {
+        Workspace(Path path,EclipseWorkspaces third) throws UnsupportedEncodingException,IOException {
             this.path=path;
             this.parent=third;
             File file_=new File(path.toFile(),dotProjectsFolderString);
@@ -220,7 +220,7 @@ class Third extends SimpleFileVisitor<Path> {
                     }
                 }
         }
-        final Third parent;
+        final EclipseWorkspaces parent;
         // maybe change this to map of filename to location?
         final Path path;
         final File dotProjectsFolder;
@@ -412,7 +412,7 @@ class Third extends SimpleFileVisitor<Path> {
         for(String string:strings)
             paths.add(Path.of(string));
         System.out.println("using: "+paths);
-        new Third().run(paths);
+        new EclipseWorkspaces().run(paths);
     }
     int totalProjects;
     int level;
